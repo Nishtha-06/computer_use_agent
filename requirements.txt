@@ -1,0 +1,5 @@
+# Computer control: mouse, keyboard, screenshots
+pyautogui
+
+# Environment variable management (useful later for API keys)
+python-dotenv
