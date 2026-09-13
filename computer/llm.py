@@ -18,5 +18,5 @@ def create_vision_llm(): # for Screenshot understanding + tool selection
     return ChatGroq(
         model = "qwen/qwen3.6-27b",
         temperature=0,
-        max_tokens=500,
+        max_tokens=300,
     )

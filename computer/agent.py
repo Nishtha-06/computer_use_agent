@@ -6,6 +6,8 @@ from io import BytesIO
 
 import time
 
+from computer.audit import log_action
+
 from computer.llm import create_vision_llm
 from computer.tools import (
     tool_screenshot,
@@ -102,7 +104,7 @@ class ComputerUseAgent:
 
         image_base64 = self.image_to_base64(image)
 
-        response = self.llm.invoke(
+        response = self.llm.bind(max_tokens=50).invoke(
             [
                 {
                     "role":"user",
@@ -144,6 +146,9 @@ class ComputerUseAgent:
         #store actions that have been executed.
         action_history = []
 
+        # Track how many times the agent has failed verification.
+        failed_attempts = 0
+
         # Take the initial screenshot before deciding what to do.
         image = capture_screen()
 
@@ -160,8 +165,29 @@ class ComputerUseAgent:
             print(response.tool_calls)
 
             if not response.tool_calls:
-                print("Task completed.")
-                print(f"Model response: {response.content}")
+                # The model did not select an action.
+                # This does not automatically mean the task is complete.
+                print("No tool selected.")
+
+                # verify the actual computer state.
+                image = capture_screen()
+
+                verification = self.verify_task(goal,image)
+
+                print(f"Verification: {verification}")
+
+                if "VERDICT=YES" in verification.upper():
+                    return {
+                        "status":"completed",
+                        "results":results,
+                    }
+
+                print("Task is not complete, but the model selected no action.")
+
+                return {
+                    "status":"no_action",
+                    "results":results
+                }
 
                 return {
                     "status":"completed",
@@ -174,12 +200,27 @@ class ComputerUseAgent:
                 print(f"Arguments: {tool_call['args']}")
     
                 result = execute_tool(tool_call)
-    
+
+                # stop this execution cycle if the user denied the action.
+                if isinstance(result,dict) and result.get("status") == "denied":
+                    return{
+                        "status":"permission_denied",
+                        "results":results,
+                    }
+
+                # return the executed action in the audit log.
+                log_action(
+                    tool_call["name"],
+                    tool_call["args"],
+                    result,
+
+                )
+
                 results.append(
                     {
                         "step":step+1,
                         "tool":tool_call["name"],
-                        "arguments":tool_call['args'],
+                        "arguments":tool_call["args"],
                         "result":result,
                     }
                 )
@@ -207,6 +248,16 @@ class ComputerUseAgent:
                     return{
                         "status":"completed",
                         "results":results
+                    }
+
+                failed_attempts += 1
+                print(f"Task not completed. Failed attempts: {failed_attempts}")
+
+                # Stop if the agent repeatedly fails to make progress.
+                if failed_attempts >= 3:
+                    return {
+                        "status": "failed",
+                        "results": results,
                     }
 
         return {

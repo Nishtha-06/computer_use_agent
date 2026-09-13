@@ -23,3 +23,6 @@ screenshots/
 # Operating system files
 .DS_Store
 Thumbs.db
+
+# Agent audit logs
+logs/

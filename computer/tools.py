@@ -12,14 +12,14 @@ def tool_screenshot():
     return screenshot()
 
 @tool
-def tool_move_mouse(x,y):
+def tool_move_mouse(x:list[int]):
     """Move the mouse cursor to the specified screen coordinates."""
-    move_mouse(x, y)
+    move_mouse(x[0],x[1])
 
 @tool
-def tool_click(x=None,y=None):
+def tool_click(x:list[int]):
     """Click at the specified screen coordinates."""
-    click(x,y)
+    click(x[0],x[1])
 
 @tool
 def tool_type_text(text):
