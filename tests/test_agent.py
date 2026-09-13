@@ -7,11 +7,8 @@ from computer.agent import ComputerUseAgent
 agent = ComputerUseAgent()
 
 #Give the agent a computer task.
-result = agent.run("Open Notepad on my computer.")
+result = agent.run("Open Notepad and type 'Hello, This is Computer Use Agent'.",max_steps=5)
 
 #Display result
-print("Agent result: ")
+print("\n Final Agent result: ")
 print(result)
-
-print("Observation: ")
-print(f"Screenshot: {result.get('screenshot')}")
