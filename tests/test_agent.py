@@ -12,3 +12,6 @@ result = agent.run("Open Notepad on my computer.")
 #Display result
 print("Agent result: ")
 print(result)
+
+print("Observation: ")
+print(f"Screenshot: {result.get('screenshot')}")

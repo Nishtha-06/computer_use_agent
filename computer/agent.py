@@ -12,9 +12,10 @@ from computer.tools import (
     tool_type_text,
 )
 from computer.executor import execute_tool
+from computer.observer import capture_screen,save_screenshot
 
 class ComputerUseAgent:
-    """Basic agent that lets the LLM choose and execute computer tool."""
+    """Computer Use Agent that can execute a tool and observe the result"""
 
     def __init__(self):
         """Initialize the LLM and available computer tools."""
@@ -33,8 +34,9 @@ class ComputerUseAgent:
         self.llm_with_tools = self.llm.bind_tools(self.tools) # bind_tools() is a built-in LangChain method
 
     def run(self,goal):
-        """Send a goal to the llm and execute the selected tool."""
+        """Execute the first action selected by the LLM and observe the result."""
 
+        # Ask the LLM to decide which computer action is required.
         response = self.llm_with_tools.invoke(goal)
 
         if not response.tool_calls:
@@ -45,6 +47,7 @@ class ComputerUseAgent:
 
         results = []
 
+        # Execute each tool selected by the LLM.
         for tool_call in response.tool_calls:
             result = execute_tool(tool_call)
 
@@ -54,7 +57,14 @@ class ComputerUseAgent:
                 "result":result
             })
 
-            return {
-                "status":"executed",
-                "results":results
-            }
+        # capture the computer state after executing the action.
+        image = capture_screen()
+
+        # save the observation for inspection.
+        screenshot_path = save_screenshot(image)
+
+        return {
+            "status":"executed",
+            "results":results,
+            "screenshot":str(screenshot_path)
+        }

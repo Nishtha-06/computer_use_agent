@@ -12,3 +12,11 @@ def create_llm():
         model = "openai/gpt-oss-120b",
         temperature=0
     )
+
+def create_vision_llm(): # for Screenshot understanding + tool selection
+    """Create and return the groq vision model."""
+    return ChatGroq(
+        model = "qwen/qwen3.6-27b",
+        temperature=0,
+        max_tokens=500,
+    )
