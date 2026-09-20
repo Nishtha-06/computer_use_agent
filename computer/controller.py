@@ -3,6 +3,7 @@
 
 import os 
 import webbrowser
+# import subprocess
 
 import pyautogui
 
@@ -31,7 +32,7 @@ def press_key(key):
     pyautogui.press(key)
 
 def open_application(application):
-    """Open a windows application using its the Windows shell."""
+    """Open a Windows application using its executable name."""
     os.startfile(application)
 
 def open_url(url):

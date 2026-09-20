@@ -1,5 +1,5 @@
 # This file tests whether a tool call selected by the LLM can be
-# execute by the compputer Use Agent
+# execute by the computer Use Agent
 
 from computer.llm import create_llm
 from computer.tools import (
@@ -46,8 +46,17 @@ if response.tool_calls:
         # execute the tool selected by LLM
         result = execute_tool(tool_call)
 
-        print("Tool executed successfully.")
         print(f"Result: {result}")
+
+        if result["status"] == "success":
+            print("Tool execution succeeded.")
+
+        elif result["status"] == "denied":
+            print("Tool execution was denied.")
+
+        elif result["status"] == "error":
+            print("Tool execution failed.")
+            
 
 else:
     print("No tool was selected")

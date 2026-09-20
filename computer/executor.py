@@ -1,7 +1,10 @@
 # this file execute the computer controll tool selected by the LLM.
-# It receives a structured tool call and run the matching LangChain tool.
+# It receives a structured tool call, checks permission, executes the
+# matching LangChain tool and returns a structured execution result.
 
 from computer.permissions import requires_permission
+from computer.error_handler import handle_tool_error
+from computer.execution_result import success_result,denied_result
 
 from computer.tools import (
     tool_screenshot,
@@ -48,7 +51,13 @@ def execute_tool(tool_call):
     if selected_tool is None:
         raise ValueError(f"Unknown tool:{tool_name}")
 
-    # Execute the selected tool with the arguments choosen by the LLM
-    result = selected_tool.invoke(tool_args)
+    try:
+        # Execute the selected tool with the arguments choosen by the LLM
+        result = selected_tool.invoke(tool_args)
 
-    return result
+        return success_result(tool_name,result)
+
+    except Exception as error:
+
+        # Convert execution errors into a structured error result.
+        return handle_tool_error(tool_name,error)

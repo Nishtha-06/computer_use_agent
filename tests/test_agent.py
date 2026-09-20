@@ -7,7 +7,7 @@ from computer.agent import ComputerUseAgent
 agent = ComputerUseAgent()
 
 #Give the agent a computer task.
-result = agent.run("Open Google Chrome and open https://www.youtube.com/",max_steps=7)
+result = agent.run("Open Notepad and type 'Hello from Computer Use Agent'",max_steps=7)
 
 #Display result
 print("\n Final Agent result: ")
