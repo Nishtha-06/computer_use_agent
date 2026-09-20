@@ -381,6 +381,11 @@ class ComputerUseAgent:
                     }
                 )
 
+                verification_status = (
+                    "executed_successfully"
+                    if isinstance(result,dict) and result.get("status") == "success"
+                    else "execution_failed"
+                )
                 # Record the action for the next LLM decision.
                 task_context.add_action(
                     
