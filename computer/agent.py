@@ -202,7 +202,7 @@ class ComputerUseAgent:
     #         continue  # or re-capture screenshot and loop again, don't touch failed_attempts
 
 
-    def verify_task(self,goal,image):
+    def verify_task(self,goal,image,action_history):
         """Ask the vision whether the user's goal has been completed."""
 
         image_base64 = self.image_to_base64(image)
@@ -216,14 +216,24 @@ class ComputerUseAgent:
                             "type":"text",
                             "text":(
                                 f"User goal: {goal}\n\n"
+                                f"Successful action history:\n{action_history}\n\n"
                                 "Inspect the CURRENT screenshot and determine whether the goal "
                                 "has been completed.\n\n"
                                 "Decision rules:\n"
-                                "- The goal is COMPLETE only if every part of the goal above is "
-                                "visibly satisfied in the screenshot.\n"
-                                "- If any required part of the goal is missing, the goal is NOT COMPLETE.\n"
-                                "- Use only the current screenshot.\n"
-                                "- Do not rely on previous actions or conversation text.\n\n"
+                                "- The goal is COMPLETE only when every required part of the goal "
+                                "has been satisfied.\n"
+                                "- Use the CURRENT screenshot to verify actions that should leave "
+                                "visible evidence, such as opening an application or displaying text.\n"
+                                "- Use the successful action history as evidence for actions that "
+                                "may not leave permanent visible evidence, such as pressing a key, "
+                                "moving the mouse, or clicking.\n"
+                                "- An action in the history is evidence only when its verification "
+                                "status shows that it executed successfully.\n"
+                                "- Do not mark the task COMPLETE merely because the latest action "
+                                "succeeded.\n"
+                                "- If any required action or visible result is still missing, return "
+                                "VERDICT=NO.\n"
+                                "- Consider the entire user goal, not just the latest action.\n\n"
                                 "Your FINAL answer must be exactly:\n"
                                 "VERDICT=YES\n"
                                 "or exactly:\n"
@@ -299,7 +309,7 @@ class ComputerUseAgent:
                 # verify the actual computer state.
                 image = capture_screen()
 
-                verification = self.verify_task(goal,image)
+                verification = self.verify_task(goal,image,action_history)
 
                 print(f"Verification: {verification}")
 
@@ -373,7 +383,7 @@ class ComputerUseAgent:
                     
                     tool_call["name"],
                     tool_call["args"],
-                    "not_completed_yet"
+                    "executed_successfully",
                     
                 )
 
@@ -384,7 +394,7 @@ class ComputerUseAgent:
                 image = capture_screen()
 
                 # verify whether the user's goal has been completed.
-                verification = self.verify_task(goal,image)
+                verification = self.verify_task(goal,image,action_history)
 
                 print(f"Verification: {verification}")
 
@@ -394,9 +404,7 @@ class ComputerUseAgent:
                         "results":results
                     }
 
-                # mark the latest action as unsuccessful.
-                action_history[-1]["verification"] = "executed_goal_incomplete"
-
+                
         return {
             "status":"max_steps_reached",
             "results":results,
