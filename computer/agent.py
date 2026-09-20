@@ -334,6 +334,9 @@ class ComputerUseAgent:
     
                 result = execute_tool(tool_call)
 
+                if isinstance(result, dict) and result.get("status") == "success":
+                    self.retry_manager.reset()
+
                 if isinstance(result,dict) and result.get("status") == "error":
                     retry_allowed = self.retry_manager.record_failure()
 
