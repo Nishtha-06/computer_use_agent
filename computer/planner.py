@@ -10,11 +10,45 @@ class TaskPlanner:
     def __init__(self):
         self.llm = create_llm()
 
+    @staticmethod
+    def _interaction_violation(goal: str, plan: str) -> str | None:
+        """Return a repair instruction when the plan changes the requested input method."""
+        goal_text = goal.lower()
+        plan_text = plan.lower()
+
+        if "click" in goal_text:
+            if "tool_click" not in plan_text:
+                return (
+                    "The goal explicitly requires a mouse click. "
+                    "The plan must include tool_click."
+                )
+
+            if "tool_press_key" in plan_text:
+                return (
+                    "The goal explicitly requires a mouse click. "
+                    "Do not replace the click with tool_press_key."
+                )
+
+        if "type" in goal_text:
+            if "tool_type_text" not in plan_text:
+                return (
+                    "The goal explicitly requires typing text. "
+                    "The plan must include tool_type_text."
+                )
+
+        if "press" in goal_text:
+            if "tool_press_key" not in plan_text:
+                return (
+                    "The goal explicitly requires pressing a key. "
+                    "The plan must include tool_press_key."
+                )
+
+        return None
+
     def create_plan(self,goal:str):
         """Generate a short step by step plan for the given goal."""
 
-        response = self.llm.invoke(
-            f"""Create a simple step by step plan for this computer task:
+        prompt = f"""Create a simple step by step plan for this computer task:
             
             User goal:
             {goal}
@@ -44,6 +78,29 @@ Planning rules:
 11. Do not execute anything.
 12. Return only the numbered plan.
 """
-        )
 
-        return response.content
+        response = self.llm.invoke(prompt)
+        plan = response.content
+        violation = self._interaction_violation(goal, plan)
+
+        if violation is not None:
+            repair_prompt = f"""Regenerate the plan for this computer task.
+
+User goal:
+{goal}
+
+Previous plan:
+{plan}
+
+Required correction:
+{violation}
+
+Return only a short numbered plan using the available tool names. Do not execute anything.
+"""
+            repaired_response = self.llm.invoke(repair_prompt)
+            repaired_plan = repaired_response.content
+
+            if self._interaction_violation(goal, repaired_plan) is None:
+                plan = repaired_plan
+
+        return plan

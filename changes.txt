@@ -1,0 +1,333 @@
+DATE / SESSION: 2026-09-21
+
+## computer/planner.py
+
+### Change
+Added code-level validation for explicit click, type, and key requests and a single regeneration attempt when the generated plan violates the requested interaction.
+
+### Reason
+The planner could translate a mouse-click request such as clicking Calculator's 5 button into tool_press_key("5").
+
+### Implementation
+The planner checks the generated plan for the required tool names, explains the violation in one repair prompt, and accepts the repaired plan only when it passes validation. Existing direct-tool planning rules remain intact.
+
+### Testing
+Ran focused fake-LLM checks for valid click plans and one invalid-then-repaired click plan.
+
+### Result
+Calculator click goals retain tool_click and do not use tool_press_key as a replacement.
+
+## computer/controller.py
+
+### Change
+Added centralized validation for screenshot-space points and bounding boxes, plus center-point calculation for valid bounding boxes.
+
+### Reason
+Vision coordinates must be checked and converted consistently before PyAutoGUI receives physical screen coordinates.
+
+### Implementation
+The controller validates numeric, in-bounds, non-zero bounding boxes and points, derives box centers, preserves the existing DPI-awareness and latest-screenshot-size conversion, and keeps click conversion in one module.
+
+### Testing
+Ran point and bounding-box checks with a 400x300 test image and compiled the module in the existing project virtual environment.
+
+### Result
+Invalid or out-of-bounds click geometry is rejected before physical execution.
+
+## computer/tools.py
+
+### Change
+Extended tool_click with optional target and bounding_box metadata while preserving x=[x, y] compatibility.
+
+### Reason
+The vision/action-selection layer needs to identify a UI target and may provide a grounded bounding box rather than an unexplained pixel.
+
+### Implementation
+tool_click accepts either a two-value point or a four-value bounding box and delegates all coordinate handling to the controller.
+
+### Testing
+Compiled the module and exercised the click path through the focused agent test with mocked execution.
+
+### Result
+Existing point-based calls remain supported; grounded boxes can be converted centrally.
+
+## computer/task_context.py
+
+### Change
+Added semantic-failure counting and context reporting for failed click locations.
+
+### Reason
+Execution success and goal-verification failure are separate states, and repeated semantic failures need bounded recovery.
+
+### Implementation
+record_semantic_failure stores the click point and increments a separate counter; has_exceeded_semantic_failures enforces the recovery limit; context output includes both values.
+
+### Testing
+Verified 25-pixel proximity behavior and semantic-failure counting in focused checks.
+
+### Result
+A successfully executed click that receives VERDICT=NO is recorded as semantic failure rather than execution failure.
+
+## computer/observer.py
+
+### Change
+Extended click-debug screenshots to accept target, bounding-box, and step metadata while preserving existing debug output and directories.
+
+### Reason
+Failed visual clicks need inspectable screenshot evidence and target geometry.
+
+### Implementation
+Valid bounding boxes are drawn in yellow in addition to the existing red selected-coordinate marker.
+
+### Testing
+The agent reliability check exercised the debug-save call with a mocked path; the module compiled successfully.
+
+### Result
+Existing click-debug screenshots remain available with improved grounding evidence.
+
+## computer/agent.py
+
+### Change
+Added click geometry validation, target-box center selection, structured no-repeat rejection, semantic-failure tracking, and removed duplicate tool execution.
+
+### Reason
+The loop could physically execute a selected click twice, repeat a coordinate after VERDICT=NO, and blur execution success with goal success.
+
+### Implementation
+Before tool_click execution, the agent validates or derives the point, rejects invalid and previously failed nearby points without touching the computer, records debug evidence, executes once, records execution and verification separately, and terminates after three semantic click failures. The vision prompt now includes grounded-box guidance and screenshot dimensions.
+
+### Testing
+Ran the focused agent test with mocked screenshots, verifier, executor, and debug output. Confirmed one physical execution followed by structured rejection of a repeated coordinate.
+
+### Result
+Execution errors continue through RetryManager; successful-but-unverified clicks follow bounded semantic recovery instead of blind looping.
+
+## tests/test_reliability.py
+
+### Change
+Added deterministic checks for Calculator click targets 5, 7, and +, coordinate and box validation, failed-point proximity, and duplicate-click prevention.
+
+### Reason
+The requested behavior needs tests that do not depend on a live desktop or LLM response.
+
+### Implementation
+Tests use fake LLM responses and mocks for computer actions, screenshots, verification, and debug persistence.
+
+### Testing
+All focused reliability checks passed using E:\\IMPpr\\com_use\\.venv\\Scripts\\python.exe.
+
+### Result
+The core interaction and recovery guarantees are covered without changing the shared environment.
+
+## Final Summary
+
+- Files changed: computer/planner.py, computer/controller.py, computer/tools.py, computer/task_context.py, computer/observer.py, computer/agent.py, tests/test_reliability.py, changes.txt.
+- Main fixes: planner intent validation, centralized coordinate/bounding-box handling, richer click debugging, code-level no-repeat protection, separate semantic failure recovery, and single click execution.
+- Tests performed: project-module compilation, focused reliability checks for Calculator 5/7/+ click planning, coordinate validation, and repeated-click rejection.
+- Remaining known issues: live GUI tests still require an interactive desktop and real model credentials; existing manual test files may invoke external APIs or physical UI actions and were not run automatically.
+- Environment note: Python, uv, Java, PATH, Hadoop paths, and UV_CACHE_DIR were not modified.
+
+DATE / SESSION: 2026-09-21 - Rejected-click history propagation
+
+## computer/task_context.py
+
+### Change
+Extended action-history entries to preserve the structured execution result when one is available.
+
+### Reason
+Rejected clicks were recorded only as `execution_rejected`, so the next vision decision could not see the rejection reason or structured result.
+
+### Implementation
+`add_action` now accepts an optional `result` and stores it without changing existing callers that do not provide one.
+
+### Testing
+Ran `uv run pytest tests/test_reliability.py -v`.
+
+### Result
+Action history retains execution status, goal verification, arguments, and rejection details.
+
+## computer/agent.py
+
+### Change
+Included structured action results in `history_text` and added explicit rules for handling rejected actions and failed click coordinates.
+
+### Reason
+The vision model repeatedly selected the same coordinate because it received the arguments and statuses but not the rejection reason or result payload.
+
+### Implementation
+Successful and rejected actions now pass their result into `TaskContext.add_action`; the prompt renders `[result: ...]` and states that `execution_rejected` is not progress, rejected arguments must not be repeated, and failed clicks must be re-grounded from the current screenshot.
+
+### Testing
+Ran the five-test reliability suite and the existing semantic no-repeat test.
+
+### Result
+The next model decision can see the failed coordinate, execution outcome, verification outcome, rejection reason, and required recovery behavior. The 25-pixel code-level protection remains unchanged.
+
+## tests/test_reliability.py
+
+### Change
+Added a deterministic test that exercises the vision-history formatting with a rejected click.
+
+### Reason
+The live failure depends on model behavior, so the history contract needs a local test that does not require Calculator or Groq credentials.
+
+### Implementation
+The test supplies a rejected `[107, 849]` click result and asserts that the prompt includes its coordinate, `execution_rejected`, reason, and non-repeat instruction.
+
+### Testing
+`uv run pytest tests/test_reliability.py -v`: 5 passed.
+
+### Result
+Rejection context is verified before any live GUI test.
+
+## Final Summary Update
+
+- Added structured rejection/result propagation to vision action history.
+- Added deterministic coverage for rejected-coordinate context.
+- Reliability suite result: 5 passed.
+- No Python, uv, Java, PATH, Hadoop, or environment configuration was modified.
+
+DATE / SESSION: 2026-09-21 - Live rejected-click recovery follow-up
+
+## computer/agent.py
+
+### Change
+Added a derived `PROHIBITED CLICK COORDINATES` section to the vision prompt and a bounded limit for repeated rejected click selections.
+
+### Reason
+The first live test showed that the model could still ignore the structured rejection result and select the same failed region repeatedly, even though the physical click was safely blocked.
+
+### Implementation
+The prompt now lists coordinates from semantic `VERDICT=NO` clicks and `execution_rejected` clicks as explicit constraints. After three rejected selections of previously failed regions, the agent returns a structured failure instead of spending remaining steps.
+
+### Testing
+Ran `uv run pytest tests/test_reliability.py -v`: 5 passed. Ran the live Calculator task with `max_steps=7`.
+
+### Result
+The live run physically executed the first click only. Subsequent selections of the same region were rejected and the agent terminated with `status=failed` and a clear repeated-region reason. The model still ignored the prohibition in this run, so visual target grounding/model compliance remains a limitation.
+
+## tests/test_reliability.py
+
+### Change
+Extended the rejection-history test to require the explicit prohibited-coordinate section in the vision prompt.
+
+### Reason
+The derived coordinate constraint is part of the action-selection contract and should remain covered deterministically.
+
+### Implementation
+The test asserts that `PROHIBITED CLICK COORDINATES` appears alongside the coordinate, rejection reason, execution status, and non-repeat rule.
+
+### Testing
+`uv run pytest tests/test_reliability.py -v`: 5 passed.
+
+### Result
+The model-facing rejection context is covered without a live desktop dependency.
+
+## Final Summary Update
+
+- Reliability suite: 5 passed.
+- Live Calculator test: no repeated failed coordinate was physically executed; repeated rejected selections now terminate with a structured failure.
+- Remaining issue: the live vision model may still ignore the explicit prohibited-coordinate instruction and needs stronger visual grounding/model behavior to select the correct Calculator target.
+
+DATE / SESSION: 2026-09-21 - Prohibited-coordinate derivation correction
+
+## computer/agent.py
+
+### Change
+Reworked `blocked_clicks` derivation in `ask_vision_model()` to inspect every `tool_click` action's `x=[x,y]` arguments and block coordinates when semantic verification is `VERDICT=NO`, execution is `execution_rejected`, or the structured result has `status=rejected`. Duplicate coordinates are removed, and the prompt now emits the exact `PROHIBITED CLICK COORDINATES: [[x, y]]` format.
+
+### Reason
+The model-facing prohibited list needed to remain reliable for both physically executed clicks that failed goal verification and clicks rejected by the 25-pixel no-repeat protection.
+
+### Implementation
+The history scan validates the click-point shape, normalizes list/tuple points, checks all required failure signals, and appends each point once. The action-selection prompt now explicitly says never to select listed coordinates, to re-ground after `VERDICT=NO`, and not to request a rejected region again.
+
+### Testing
+Ran `uv run pytest tests/test_reliability.py -v`: 6 passed. Ran the live Calculator task with `max_steps=5`.
+
+### Result
+The deterministic prompt test confirms `PROHIBITED CLICK COORDINATES: [[107, 849]]` after both semantic and rejected history entries. In the live run, the first failed coordinate was listed and subsequent physical clicks were prevented, although the model still requested the prohibited point and the task ended with the existing repeated-rejection failure.
+
+## tests/test_reliability.py
+
+### Change
+Added coverage for combining semantic failure and rejection history while deduplicating the prohibited coordinate.
+
+### Reason
+This guards the exact live bug where the first `VERDICT=NO` coordinate must persist after a later rejection with no verification result.
+
+### Implementation
+The test builds both history forms for `[107, 849]` and asserts the exact prohibited-list rendering plus all recovery instructions.
+
+### Testing
+`uv run pytest tests/test_reliability.py -v`: 6 passed.
+
+### Result
+Both failure paths now have deterministic coverage.
+
+## Final Summary Update
+
+- Files changed in this session: computer/agent.py, tests/test_reliability.py, changes.txt.
+- Deterministic result: 6 passed.
+- Live Calculator result: first failed coordinate was prohibited and never physically repeated; the model still ignored the list and the bounded rejection failure ended the run.
+- Environment and unrelated dependency-file changes were not modified.
+
+DATE / SESSION: 2026-09-21 - Target and bounding-box visual grounding
+
+## computer/agent.py
+
+### Change
+Strengthened the vision action-selection instructions so visual clicks must identify the target and provide a complete, tightly surrounding `bounding_box=[x1,y1,x2,y2]` in screenshot coordinates. The model is explicitly told not to guess or calculate the final click center.
+
+### Reason
+The screenshot was correct, but point-based model output such as `x=[100,400]` landed in the VS Code area instead of the visible Calculator 5 button. A target box gives the controller a visual region to validate and center reliably.
+
+### Implementation
+Existing controller box validation and center calculation remain the source of truth. The agent continues to support legacy `x=[x,y]` calls, while when both fields are supplied it already derives the click point from the bounding box.
+
+### Testing
+Ran `uv run pytest tests/test_reliability.py -v`: 6 passed. The requested live command was attempted but the second vision request was blocked by Groq HTTP 429 rate limiting for `qwen/qwen3.8-27b`.
+
+### Result
+Visual action selection now has an explicit target-plus-box contract, with no changes to coordinate conversion, validation, semantic failure handling, or the 25px guard. No live bounding box was available because the model request was rate-limited.
+
+## computer/observer.py
+
+### Change
+Click-debug screenshots now label the selected target when provided, while retaining the yellow bounding box and red calculated center/crosshair.
+
+### Reason
+Debug artifacts must make it possible to compare the model target, its complete box, and the actual center used for clicking.
+
+### Implementation
+The optional target name is drawn beside the calculated click center; existing screenshot and box drawing behavior is preserved.
+
+### Testing
+Module diagnostics passed and the reliability suite remained green.
+
+### Result
+Click-debug images retain the bounding box and center marker and now include target text when available.
+
+## tests/test_reliability.py
+
+### Change
+Added deterministic center and invalid-box checks and assertions for the required visual-grounding prompt.
+
+### Reason
+The grounding contract must be verified without depending on a live desktop or vision-model availability.
+
+### Implementation
+`[100, 200, 200, 300]` is asserted to produce `[150, 250]`; zero-size boxes are rejected; the prompt must require a bounding box and prohibit guessed click points.
+
+### Testing
+`uv run pytest tests/test_reliability.py -v`: 6 passed.
+
+### Result
+The box-to-center and model-instruction contracts are covered deterministically.
+
+## Final Summary Update
+
+- Visual clicks now require target-plus-bounding-box guidance, with controller-derived centers and preserved point compatibility.
+- Click-debug output retains the box and center and labels the target.
+- Deterministic tests: 6 passed.
+- Live Calculator test: stopped after opening Calculator because Groq returned HTTP 429 rate limiting before a bounding-box response; Calculator 5 was not confirmed clicked.

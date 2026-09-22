@@ -17,10 +17,19 @@ def tool_move_mouse(x:list[int]):
     move_mouse(x[0],x[1])
 
 @tool
-def tool_click(x:list[int]):
+def tool_click(
+    x: list[int] | None = None,
+    target: str | None = None,
+    bounding_box: list[int] | None = None,
+):
     """Click at screen coordinates [x, y].
     Use this only when a direct computer tool cannot perform the required action."""
-    click(x[0],x[1])
+    if bounding_box is not None:
+        click(bounding_box=bounding_box)
+    elif x is not None and len(x) == 2:
+        click(x[0], x[1])
+    else:
+        raise ValueError("tool_click requires x=[x, y] or bounding_box=[x1, y1, x2, y2].")
 
 @tool
 def tool_type_text(text:str):
